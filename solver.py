@@ -1,6 +1,7 @@
 import torch
 import warnings
 
+
 def grad_semi_dual(beta, M, reg, v):
     """
     to compute the gradient w.r.t. dual variable v in regularized semi-dual OT problem.
@@ -79,20 +80,20 @@ def c_transform_entropic(beta, M, reg, v):
     return u.squeeze(-1)
 
 
-def solve_semi_dual_entropic(alpha, beta, M, reg, numItermax=10000, lr=None):
+def solve_semi_dual_entropic(alpha, beta, M, reg, device, numItermax=10000, lr=None):
     """
-
     :param alpha: Source measure [Nt,]
     :param beta: Target measure [Ns,]
     :param M: Cost matrix. [Ns,Nt]
     :param reg: regularization term
+    :param device: deivce
     :param numItermax: Maximum number of iterations
     :param lr: learning rate
 
     :return: optimal coupling pi, optimal dual variables u,v
     """
 
-    device = alpha.device
+    device = device
     opt_v = averaged_sgd_entropic_transport(alpha, beta, M, reg, numItermax, lr, device)
 
     opt_u = c_transform_entropic(beta, M, reg, opt_v)
