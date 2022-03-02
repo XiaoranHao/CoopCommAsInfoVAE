@@ -4,6 +4,7 @@ from base import *
 from torch.distributions import Normal, Independent
 from torch.distributions.bernoulli import Bernoulli
 import solver
+import ot
 
 
 class Decoder(nn.Module):
@@ -55,46 +56,65 @@ class NegEntropy(object):
     def __init__(self, epsilon):
         self.epsilon = epsilon
 
-    def Omega(self, x):
+    def omega(self, x):
         x = x.masked_fill(x <= 0., 1.)
-        return (x * torch.log(x)).sum()
+        return self.epsilon * (x * torch.log(x)).sum()
 
 
-class EOT_sample(nn.Module):
-    def __init__(self, n_sample, epsilon, in_channels, latent_dim, activation, img_size, n_channels=None):
-        super(EOT_sample, self).__init__()
+class CoopCommSemiDual(nn.Module):
+    def __init__(self, n_sample, epsilon, in_channels, latent_dim, activation, img_size, device,
+                 maxiter=1000, n_channels=None):
+        super(CoopCommSemiDual, self).__init__()
         self.e = epsilon
         self.entropy = NegEntropy(epsilon)
         self.c_function = Decoder(in_channels, latent_dim, activation, img_size, n_channels)
+        self.latent_dim = latent_dim
+        self.n_sample = n_sample
+        self.device = device
+        self.maxiter = maxiter
 
-        mu = torch.zeros(n_sample, latent_dim)
-        self.pz_true = Independent(Normal(loc=mu, scale=torch.ones_like(mu)),
-                                   reinterpreted_batch_ndims=1)
+    def z_sample(self, n_sample):
+        mu = torch.zeros(n_sample, self.latent_dim)
+        pz_true = Independent(Normal(loc=mu, scale=torch.ones_like(mu)), reinterpreted_batch_ndims=1)
+        return pz_true.sample().to(self.device)
 
-        self.pz = (torch.ones(n_sample) / n_sample).to(device)
+    def sinkhorn_scaling(self, x, z):
+        px = (torch.ones(len(x)) / len(x)).to(self.device)
+        pz = (torch.ones(len(z)) / len(z)).to(self.device)
 
-    def sinkhorn_scaling(self, x):
-        self.px = torch.ones(len(x)) / len(x)
-        self.z = self.pz_true.sample()
-        dist = self.c_function(self.z)
-        x = x.repeat(1, len(self.z), 1, 1).unsqueeze(2)
+        # px = torch.tensor(ot.utils.unif(len(x))).to(self.device)
+        # pz = torch.tensor(ot.utils.unif(len(z))).to(self.device)
+
+        dist = self.c_function(z)
+        x = x.expand(-1, len(z), -1, -1).unsqueeze(2)
         C = -dist.log_prob(x).sum([2, 3, 4])
-        P = ot.sinkhorn(self.px, self.pz, C, self.e, method='sinkhorn_log')
-        return P, C
+        with torch.no_grad():
+            P = ot.sinkhorn(px, pz, C, self.e, method='sinkhorn_log')
+        kl = self.entropy.omega(P) - self.entropy.omega(px) - self.entropy.omega(pz)
 
-    def semi_dual_sgd(self, x):
-        self.px = (torch.ones(len(x)) / len(x)).to(device)
-        self.z = self.pz_true.sample().to(device)
-        dist = self.c_function(self.z)
-        x = x.repeat(1, len(self.z), 1, 1).unsqueeze(2)
-        C = -dist.log_prob(x).sum([2, 3, 4])
-        P, u, v = solver.solve_semi_dual_entropic(self.px, self.pz, C, reg=1, numItermax=1000)
-        return P, C
-
-    def forward(self, x):
-        P, C = self.semi_dual_sgd(x)
-        kl = self.entropy.Omega(P) - self.entropy.Omega(self.px) - self.entropy.Omega(self.pz)
         return P, C, kl
 
-    def loss(self, P, C, kl):
-        return (P * C).sum() + kl
+    def semi_dual_sgd(self, x, z):
+        px = (torch.ones(len(x)) / len(x)).to(self.device)
+        pz = (torch.ones(len(z)) / len(z)).to(self.device)
+
+        dist = self.c_function(z)
+        x = x.expand(-1, len(z), -1, -1).unsqueeze(2)
+        C = -dist.log_prob(x).sum([2, 3, 4])
+        with torch.no_grad():
+            P, u, v = solver.solve_semi_dual_entropic(px, pz, C, reg=self.e, device=self.device, numItermax=self.maxiter)
+        P_con = P * len(x)
+        kl = torch.nan_to_num(P_con * (torch.log(P_con) - torch.log(pz)))
+        kl = kl.sum(dim=1).mean()
+
+        return P, C, kl
+
+    def forward(self, x, n_sample=None):
+        if n_sample is None:
+            n_sample = self.n_sample
+        z = self.z_sample(n_sample)
+        P, C, kl = self.semi_dual_sgd(x, z)
+        return P, C, kl, z
+
+    def EotLoss(self, P, C, kl):
+        return (P * C).sum() + self.e * kl
