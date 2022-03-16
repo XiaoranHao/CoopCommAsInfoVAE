@@ -42,7 +42,7 @@ def get_loaders(args):
     #     subset = list(range(0, 300))
     #     train_data= torch.utils.data.Subset(train_data, subset)
 
-        train_queue = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True,
+        train_queue = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4,
                                                   pin_memory=True)
 
         test_queue = torch.utils.data.DataLoader(test_data, batch_size=10000, shuffle=False, pin_memory=True)

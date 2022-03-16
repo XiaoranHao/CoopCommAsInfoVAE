@@ -63,7 +63,7 @@ class NegEntropy(object):
 
 class CoopCommSemiDual(nn.Module):
     def __init__(self, n_sample, n_chunk, epsilon, in_channels, latent_dim, activation, img_size, device,
-                 maxiter=500, n_channels=None, method='sample'):
+                 maxiter=1000, n_channels=None, method='sample'):
         super(CoopCommSemiDual, self).__init__()
         self.e = epsilon
         self.entropy = NegEntropy(epsilon)
@@ -119,12 +119,13 @@ class CoopCommSemiDual(nn.Module):
             x_exp = x.expand(-1, len(z), -1, -1).unsqueeze(2)
             x_chunk = torch.chunk(x_exp, self.n_chunk)
             C = []
-            for i in range(5):
+            for i in range(self.n_chunk):
 
                 C_ = -dist.log_prob(x_chunk[i]).sum([2, 3, 4])
                 C.append(C_)
             C = torch.cat(C)
             P, u, v = solver.solve_semi_dual_entropic(px, pz, C, reg=self.e, device=self.device, numItermax=self.maxiter)
+
         P_con = P * len(x)
         kl = torch.nan_to_num(P_con * (torch.log(P_con) - torch.log(pz)))
         kl = kl.sum(dim=1).mean()

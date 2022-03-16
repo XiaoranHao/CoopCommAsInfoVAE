@@ -23,6 +23,8 @@ parser.add_argument('--latent_dim', type=int, default=2, metavar='N',
                     help='dimension of z space (default: 2)')
 parser.add_argument('--sample_size', type=int, default=1024, metavar='N',
                     help='sample size for prior distribution (default: 1024)')
+parser.add_argument('--chunk_size', type=int, default=10, metavar='N',
+                    help='chunk size for batch (default: 10)')
 parser.add_argument('--epsilon', type=float, default=1.0, metavar='N',
                     help='weight of regularization (default: 1.0)')
 parser.add_argument('--learning_rate', type=float, default=1e-2,
@@ -56,11 +58,11 @@ if __name__ == '__main__':
         img_size = 64
     # initialize model
     in_channel = 1
-    model = models.CoopCommSemiDual(args.sample_size, args.epsilon, in_channel,
+    model = models.CoopCommSemiDual(args.sample_size, args.chunk_size, args.epsilon, in_channel,
                                     args.latent_dim, activFun, img_size, device)
     model = model.to(device)
 
     start_time = time.time()
-    train(model, train_loader, args, device, log_interval=1)
+    train(model, train_loader, args, device, log_interval=10)
     print("after training")
     print('training time elapsed {}s'.format(time.time() - start_time))
