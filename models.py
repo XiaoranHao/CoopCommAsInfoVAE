@@ -62,8 +62,8 @@ class NegEntropy(object):
 
 
 class CoopCommSemiDual(nn.Module):
-    def __init__(self, n_sample, epsilon, in_channels, latent_dim, activation, img_size, device,
-                 maxiter=1000, n_channels=None):
+    def __init__(self, n_sample, n_chunk, epsilon, in_channels, latent_dim, activation, img_size, device,
+                 maxiter=500, n_channels=None, method='sample'):
         super(CoopCommSemiDual, self).__init__()
         self.e = epsilon
         self.entropy = NegEntropy(epsilon)
@@ -72,6 +72,8 @@ class CoopCommSemiDual(nn.Module):
         self.n_sample = n_sample
         self.device = device
         self.maxiter = maxiter
+        self.method = method
+        self.n_chunk = n_chunk
 
     def z_sample(self, n_sample):
         mu = torch.zeros(n_sample, self.latent_dim)
@@ -109,12 +111,45 @@ class CoopCommSemiDual(nn.Module):
 
         return P, C, kl
 
+    def semi_dual_sgd_sample(self, x, z):
+        px = (torch.ones(len(x)) / len(x)).to(self.device)
+        pz = (torch.ones(len(z)) / len(z)).to(self.device)
+        with torch.no_grad():
+            dist = self.c_function(z)
+            x_exp = x.expand(-1, len(z), -1, -1).unsqueeze(2)
+            x_chunk = torch.chunk(x_exp, self.n_chunk)
+            C = []
+            for i in range(5):
+
+                C_ = -dist.log_prob(x_chunk[i]).sum([2, 3, 4])
+                C.append(C_)
+            C = torch.cat(C)
+            P, u, v = solver.solve_semi_dual_entropic(px, pz, C, reg=self.e, device=self.device, numItermax=self.maxiter)
+        P_con = P * len(x)
+        kl = torch.nan_to_num(P_con * (torch.log(P_con) - torch.log(pz)))
+        kl = kl.sum(dim=1).mean()
+        categ = torch.distributions.categorical.Categorical(P_con)
+        s = categ.sample()
+        z_sample = z[s]
+        dist = self.c_function(z_sample)
+        C = -dist.log_prob(x).sum([1, 2, 3])
+
+        return P, C, kl, z_sample
+
     def forward(self, x, n_sample=None):
         if n_sample is None:
             n_sample = self.n_sample
         z = self.z_sample(n_sample)
-        P, C, kl = self.semi_dual_sgd(x, z)
+        if self.method == 'sample':
+            P, C, kl, z_ = self.semi_dual_sgd_sample(x, z)
+        else:
+            P, C, kl = self.semi_dual_sgd(x, z)
         return P, C, kl, z
 
     def EotLoss(self, P, C, kl):
-        return (P * C).sum() + self.e * kl
+        if self.method == 'sample':
+            return C.mean() + self.e * kl
+        else:
+            return (P * C).sum() + self.e * kl
+
+
