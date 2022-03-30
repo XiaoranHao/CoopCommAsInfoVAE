@@ -58,7 +58,7 @@ if __name__ == '__main__':
         img_size = 64
     # initialize model
     in_channel = 1
-    model = models.CoopCommSemiDual(args.sample_size, args.chunk_size, args.epsilon, in_channel,
+    model = models.Dirichletp(args.sample_size, args.chunk_size, args.epsilon, in_channel,
                                     args.latent_dim, activFun, img_size, device)
     model = model.to(device)
 
