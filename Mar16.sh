@@ -8,13 +8,10 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=p_ps848
 #SBATCH --mem=40000
-source activate xiaoran
+source ~/.bashrc
+conda activate xiaoran
 
-python ~/EOT/main.py --epochs 80 --seed 1 --save 'eotexp1'
-python ~/EOT/main.py --epochs 80 --seed 2 --save 'eotexp2'
-python ~/EOT/main.py --epochs 80 --seed 1 --latent_dim 3 --save 'eotexp3'
-python ~/EOT/main.py --epochs 80 --seed 2 --latent_dim 3 --save 'eotexp4'
-python ~/EOT/main.py --epochs 80 --seed 1 --save 'eotexp5' --sample_size 1500
-python ~/EOT/main.py --epochs 80 --seed 2 --save 'eotexp6' --sample_size 1500
-python ~/EOT/main.py --epochs 80 --seed 1 --latent_dim 3 --save 'eotexp7' --sample_size 1500
-python ~/EOT/main.py --epochs 80 --seed 2 --latent_dim 3 --save 'eotexp8' --sample_size 1500
+python ~/EOT/main.py --epochs 80 --seed 1 --batch_size 1024 --sample_size 6000 --save 'eotexp1'
+python ~/EOT/main.py --epochs 80 --seed 1 --batch_size 1024 --sample_size 6000 --latent_dim 3 --save 'eotexp2'
+python ~/EOT/main.py --epochs 80 --seed 1 --batch_size 1024 --sample_size 6000 --latent_dim 6 --save 'eotexp3'
+python ~/EOT/main.py --epochs 80 --seed 1 --batch_size 1024 --sample_size 10000 --latent_dim 6 --save 'eotexp4'
