@@ -6,6 +6,7 @@ from torch.distributions.bernoulli import Bernoulli
 import solver
 import ot
 import LargeScaleOT
+torch.set_default_dtype(torch.float32)
 
 
 class Encoder(nn.Module):
@@ -211,7 +212,7 @@ class CoopCommDualOT(nn.Module):
         self.num_data = num_data
         self.n_chunk = n_chunk
         self.reg = reg
-        self.DualOT = LargeScaleOT.DualOT(latent_dim, num_data, reg, maxiter=1000, lr1=1e-5, lr2=3e-4)
+        self.DualOT = LargeScaleOT.DualOT(latent_dim, num_data, reg, maxiter=1, lr1=1e-5, lr2=5e-2)
         self.device = device
 
     def z_sample(self, n_sample):
@@ -236,8 +237,8 @@ class CoopCommDualOT(nn.Module):
                 C.append(C_)
             C = torch.cat(C)
         W_xz = self.DualOT(idx, z, C)
-        print(W_xz.max())
-        print(W_xz.min())
+        # print(W_xz.max())
+        # print(W_xz.min())
 
         categ = torch.distributions.categorical.Categorical(W_xz)
         s = categ.sample()

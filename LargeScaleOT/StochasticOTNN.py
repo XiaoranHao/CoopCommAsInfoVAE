@@ -54,6 +54,14 @@ class PyTorchStochasticOT(nn.Module):
         H_epsilon = torch.exp(exponent)
         H_epsilon_weight = torch.exp(exponent-max_exponent)
         f_epsilon = - self.reg * H_epsilon
+        # print("uv: ", uv_cross.max())
+        # print("u: ",  u_batch.max())
+        # print("v: ",  v_batch.max())
+        #
+        # print("M: ",  M_batch.min())
+        # print("exp: ", exponent.max())
+        # print("H: ", H_epsilon.max())
+
         return - torch.mean(uv_cross + f_epsilon), H_epsilon_weight
 
     def forward(self, idx, z_batch, M):
@@ -78,16 +86,26 @@ class DualOT(nn.Module):
                             {"params": self.sto.v.parameters()}]
 
         optimizer = torch.optim.Adam(trainable_params, lr=self.lr1)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.maxiter, eta_min=1e-6)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.maxiter, eta_min=1e-8)
 
         for i in range(1, self.maxiter+1):
             optimizer.zero_grad()
-            # print(self.sto.u(d_idx))
-            # print(self.sto.v(z_batch))
+            # if i % 5000 == 1:
+            #     u_batch = (self.sto.u(d_idx))
+            #     v_batch = (self.sto.v(z_batch))
+            #     uv_cross = u_batch[:, None] + v_batch[None, :]
+            #     exponent = (uv_cross - M_batch) / 1 - 1.
+            #     max_exponent = torch.max(exponent, dim=1, keepdim=True)[0]
+            #     print("uv: ", uv_cross.max())
+            #     print("u: ",  u_batch.max())
+            #     print("v: ",  v_batch.max())
+            #
+            #     print("M: ",  M_batch.min())
+            #     print("exp: ", exponent.max())
             loss_batch, H_epsilon = self.sto(d_idx, z_batch, M_batch)
             loss_batch.backward()
             optimizer.step()
-            scheduler.step()
+            # scheduler.step()
             # if i % 1000 == 1:
             #     print(i, "OT loss: ", loss_batch.item())
 
