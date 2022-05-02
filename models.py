@@ -212,7 +212,7 @@ class CoopCommDualOT(nn.Module):
         self.num_data = num_data
         self.n_chunk = n_chunk
         self.reg = reg
-        self.DualOT = LargeScaleOT.DualOT(latent_dim, num_data, reg, maxiter=1, lr1=1e-5, lr2=5e-2)
+        self.DualOT = LargeScaleOT.DualOT(latent_dim, num_data, reg, maxiter=1, lr1=3e-5, lr2=5e-2)
         self.device = device
 
     def z_sample(self, n_sample):
@@ -230,9 +230,9 @@ class CoopCommDualOT(nn.Module):
         with torch.no_grad():
             dist = self.c_function(z)
             x_total_batch = x.expand(-1, len(z), -1, -1).unsqueeze(2)
-            x_chunk = torch.chunk(x_total_batch, self.n_chunk)
+            x_chunk = torch.tensor_split(x_total_batch, self.n_chunk)
             C = []
-            for i in range(self.n_chunk):
+            for i in range(len(x_chunk)):
                 C_ = -dist.log_prob(x_chunk[i]).sum([2, 3, 4])
                 C.append(C_)
             C = torch.cat(C)

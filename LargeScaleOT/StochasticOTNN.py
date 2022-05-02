@@ -49,7 +49,8 @@ class PyTorchStochasticOT(nn.Module):
 
     def dual_OT_batch_loss(self, u_batch, v_batch,  M_batch):
         uv_cross = u_batch[:, None] + v_batch[None, :]
-        exponent = (uv_cross - M_batch)/self.reg-1.
+        exponent_ = (uv_cross - M_batch)/self.reg-1.
+        exponent = torch.where(exponent_ > 85, exponent_- 30, exponent_)
         max_exponent = torch.max(exponent, dim=1, keepdim=True)[0]
         H_epsilon = torch.exp(exponent)
         H_epsilon_weight = torch.exp(exponent-max_exponent)
