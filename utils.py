@@ -48,11 +48,8 @@ def train(model, train_loader, args, device, log_interval=1):
 def train_DualOT(model, train_loader, args, device, log_interval=1):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
-    # diff = 0.01 - 1/784
-    # dpe = diff/args.epochs
     for epoch in range(1, args.epochs + 1):
         loss_sum = 0
-        # model.set_reg(max(0.01 - dpe*epoch, 1/784))
         for batch_idx, (data, target, idx) in enumerate(train_loader):
             data = data.to(device)
             optimizer.zero_grad()
@@ -74,17 +71,14 @@ def train_DualOT(model, train_loader, args, device, log_interval=1):
 def train_DualOT2(model, train_loader, args, device, log_interval=1):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
-    # diff = 0.01 - 1/784
-    # dpe = diff/args.epochs
     for epoch in range(1, args.epochs + 1):
         loss_sum = 0
-        # model.set_reg(max(0.01 - dpe*epoch, 1/784))
         for batch_idx, (data, target, idx) in enumerate(train_loader):
             data = data.to(device)
             optimizer.zero_grad()
-            C_, C, z_, z = model(data, idx)
-            if epoch > args.epochs*0.3:
-                loss = model.EotLoss(C)
+            C, C_, z_, z = model(data, idx)
+            if batch_idx == len(train_loader)-1:
+                loss = model.EotLoss(C_)
                 loss.backward()
                 optimizer.step()
                 scheduler.step()
