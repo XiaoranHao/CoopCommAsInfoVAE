@@ -98,12 +98,13 @@ class NegEntropy(object):
 
 
 class CoopCommSemiDual(nn.Module):
-    def __init__(self, n_sample, n_chunk, epsilon, in_channels, latent_dim, activation, img_size, device,
+    def __init__(self, num_data, n_sample, n_chunk, epsilon, in_channels, latent_dim, activation, img_size, device,
                  maxiter=1000, n_channels=None, method='sample'):
         super(CoopCommSemiDual, self).__init__()
-        self.e = epsilon
+        self.epsilon = epsilon
         self.entropy = NegEntropy(epsilon)
         self.c_function = Decoder(in_channels, latent_dim, activation, img_size, n_channels)
+        self.num_data = num_data
         self.latent_dim = latent_dim
         self.n_sample = n_sample
         self.device = device
@@ -112,9 +113,9 @@ class CoopCommSemiDual(nn.Module):
         self.n_chunk = n_chunk
 
     def z_sample(self, n_sample):
-        mu = torch.zeros(n_sample, self.latent_dim)
-        pz_true = Independent(Normal(loc=mu, scale=torch.ones_like(mu)), reinterpreted_batch_ndims=1)
-        return pz_true.sample().to(self.device)
+        mu = torch.zeros(self.latent_dim)
+        pz = Normal(loc=mu, scale=torch.ones_like(mu))
+        return pz.sample([n_sample]).to(self.device)
 
     def sinkhorn_scaling(self, x, z):
         px = (torch.ones(len(x)) / len(x)).to(self.device)
@@ -129,7 +130,6 @@ class CoopCommSemiDual(nn.Module):
         with torch.no_grad():
             P = ot.sinkhorn(px, pz, C, self.e, method='sinkhorn_log')
         kl = self.entropy.omega(P) - self.entropy.omega(px) - self.entropy.omega(pz)
-
         return P, C, kl
 
     def semi_dual_sgd(self, x, z):
@@ -140,7 +140,7 @@ class CoopCommSemiDual(nn.Module):
         x = x.expand(-1, len(z), -1, -1).unsqueeze(2)
         C = -dist.log_prob(x).sum([2, 3, 4])
         with torch.no_grad():
-            P, u, v = solver.solve_semi_dual_entropic(px, pz, C, reg=self.e, device=self.device, numItermax=self.maxiter)
+            P, u, v = solver.solve_semi_dual_entropic(px, pz, C, reg=self.epsilon, device=self.device, numItermax=self.maxiter)
         P_con = P * len(x)
         kl = torch.nan_to_num(P_con * (torch.log(P_con) - torch.log(pz)))
         kl = kl.sum(dim=1).mean()
@@ -160,7 +160,7 @@ class CoopCommSemiDual(nn.Module):
                 C_ = -dist.log_prob(x_chunk[i]).sum([2, 3, 4])
                 C.append(C_)
             C = torch.cat(C)
-            P, u, v = solver.solve_semi_dual_entropic(px, pz, C, reg=self.e, device=self.device, numItermax=self.maxiter)
+            P, u, v = solver.solve_semi_dual_entropic(px, pz, C, reg=self.epsilon, device=self.device, numItermax=self.maxiter)
 
         P_con = P * len(x)
         kl = torch.nan_to_num(P_con * (torch.log(P_con) - torch.log(pz)))
@@ -300,3 +300,67 @@ class VAE(nn.Module):
         loss = -recons_loss + kl_z
         return loss, recons_loss, kl_z
 
+
+class CoopCommSemiDual2(nn.Module):
+    def __init__(self, data, num_data, n_sample, n_chunk, epsilon, in_channels, latent_dim, activation, img_size, device,
+                 maxiter=300, n_channels=None):
+        super(CoopCommSemiDual2, self).__init__()
+        self.epsilon = epsilon
+        self.entropy = NegEntropy(epsilon)
+        self.c_function = Decoder(in_channels, latent_dim, activation, img_size, n_channels)
+        self.data = data 
+        self.num_data = num_data
+        self.px = (torch.ones(num_data) / num_data)
+        self.v = None
+        self.latent_dim = latent_dim
+        self.n_sample = n_sample
+        self.device = device
+        self.maxiter = maxiter
+        self.n_chunk = n_chunk
+        self.solver = solver.solve_semi_dual_entropic
+    def z_sample(self, n_sample):
+        mu = torch.zeros(self.latent_dim)
+        pz = Normal(loc=mu, scale=torch.ones_like(mu))
+        return pz.sample([n_sample]).to(self.device)
+
+    def make_cost(self, z):
+        with torch.no_grad():
+            dist = self.c_function(z)
+            x_exp = self.data.expand(-1, len(z), -1, -1).unsqueeze(2)
+            x_chunk = torch.tensor_split(x_exp, self.n_chunk)
+            C = []
+            for i in range(len(x_chunk)):
+                C_ = -dist.log_prob(x_chunk[i]).sum([2, 3, 4])
+                C.append(C_)
+
+            del dist, x_exp, x_chunk, C_
+            return torch.cat(C).t()
+    def SemiDual_Train(self, z):
+        # SGD training of SemiDual EOT
+        px = self.px.to(self.device)
+        pz = None
+        C = self.make_cost(z)
+        W_xz, u, v, loss = self.solver(pz, px, C, reg=self.epsilon, numItermax=self.maxiter, cur_v=self.v, lr=100., device=self.device)
+        self.v = v
+        del C
+        return W_xz.t()
+
+    def forward(self, idx, n_sample=None, n_resample=5):
+        for i in range(n_resample):
+            if n_sample is None:
+                n_sample = self.n_sample
+            z = self.z_sample(n_sample)
+            W_xz = self.SemiDual_Train(z)
+
+        x = self.data[idx]
+        W_xz = W_xz[idx]
+        # sampling for VAE training
+        categ = torch.distributions.categorical.Categorical(W_xz)
+        s = categ.sample()
+        z_sample = z[s]
+        dist = self.c_function(z_sample)
+        C = -dist.log_prob(x).sum([1, 2, 3])
+        return C, z_sample
+
+    def EotLoss(self, C, ):
+        return C.mean()

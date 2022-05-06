@@ -20,7 +20,7 @@ def grad_semi_dual(beta, M, reg, v):
     return beta - khi.mean(dim=0)
 
 
-def averaged_sgd_entropic_transport(alpha, beta, M, reg, numItermax=10000, lr=None, device='cuda', stopThr=1e-9):
+def averaged_sgd_entropic_transport(alpha, beta, M, reg, numItermax=10000, cur_v=None, lr=None, device='cuda', stopThr=1e-9):
     """
     solve regularized semi-dual OT problem by ASGD.
 
@@ -39,7 +39,8 @@ def averaged_sgd_entropic_transport(alpha, beta, M, reg, numItermax=10000, lr=No
     if lr is None:
         lr = 1. / max(alpha / reg)
     n_target = M.shape[1]
-    cur_v = torch.zeros(n_target).to(device)
+    if cur_v is None:
+        cur_v = torch.zeros(n_target).to(device)
     ave_v = torch.zeros(n_target).to(device)
 
     for cur_iter in range(numItermax):
@@ -80,7 +81,7 @@ def c_transform_entropic(beta, M, reg, v):
     return u.squeeze(-1)
 
 
-def solve_semi_dual_entropic(alpha, beta, M, reg, device, numItermax=10000, lr=None):
+def solve_semi_dual_entropic(alpha, beta, M, reg, numItermax=10000, cur_v=None, lr=None, device='cuda'):
     """
     :param alpha: Source measure [Nt,]
     :param beta: Target measure [Ns,]
@@ -93,11 +94,16 @@ def solve_semi_dual_entropic(alpha, beta, M, reg, device, numItermax=10000, lr=N
     :return: optimal coupling pi, optimal dual variables u,v
     """
 
-    device = device
-    opt_v = averaged_sgd_entropic_transport(alpha, beta, M, reg, numItermax, lr, device)
+    opt_v = averaged_sgd_entropic_transport(alpha, beta, M, reg, numItermax, cur_v, lr, device)
 
     opt_u = c_transform_entropic(beta, M, reg, opt_v)
 
-    pi = (torch.exp((opt_u[:, None] + opt_v[None, :] - M) / reg) *
-          alpha[:, None] * beta[None, :])
-    return pi, opt_u, opt_v
+    # pi = (torch.exp((opt_u[:, None] + opt_v[None, :] - M) / reg) *
+    #       alpha[:, None] * beta[None, :])
+
+    uv_cross = opt_u[:, None] + opt_v[None, :]
+    exponent = (uv_cross - M)/reg
+    max_exponent = torch.max(exponent, dim=0, keepdim=True)[0]
+    pi  = torch.exp(exponent-max_exponent)
+
+    return pi, opt_u, opt_v, opt_u.mean()+opt_v.mean()

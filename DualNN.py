@@ -65,7 +65,8 @@ if __name__ == '__main__':
     model = model.to(device)
     start_time = time.time()
     model.c_function.load_state_dict(torch.load('./savedmodels/decoder.pth'))
-    train_DualOT(model, train_loader, args, device, log_interval=200)
+    model.load_state_dict(torch.load('./savedmodels/DualNN32.pth'))     
+    train_DualOT(model, train_loader, args, device, log_interval=1)
 
     print("after training")
     print('training time elapsed {}s'.format(time.time() - start_time))

@@ -64,7 +64,7 @@ def get_loaders(args, idx=True):
         train_transform, valid_transform = _data_transforms_mnist()
         if idx:
             train_data = MNIST(args.data, True, True, train_transform)
-            test_data = MNIST(args.data, False, True, valid_transform)
+            test_data = MNIST(args.data, True, True, train_transform)
         else:
             train_data = torchvision.datasets.MNIST(root=args.data, train=True, download=True, transform=train_transform)
             test_data = torchvision.datasets.MNIST(root=args.data, train=False, download=True, transform=valid_transform)
@@ -72,12 +72,14 @@ def get_loaders(args, idx=True):
         # sub_idx = train_data.targets <= 2
         # train_data.targets = train_data.targets[sub_idx]
         # train_data.data = train_data.data[sub_idx]
-        # subset = list(range(0, 512))
+        # subset = list(range(0, 2000))
         # train_data = torch.utils.data.Subset(train_data, subset)
+        # test_data = torch.utils.data.Subset(test_data, subset)
+
         num_train, num_test = len(train_data), len(test_data)
-        train_queue = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=4,
+        train_queue = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=8,
                                                   pin_memory=True)
 
-        test_queue = torch.utils.data.DataLoader(test_data, batch_size=num_test, shuffle=False, pin_memory=True)
+        test_queue = torch.utils.data.DataLoader(test_data, batch_size=num_train, shuffle=False, pin_memory=True)
 
         return train_queue, test_queue, num_train, num_test
