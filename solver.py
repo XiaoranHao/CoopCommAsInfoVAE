@@ -98,12 +98,12 @@ def solve_semi_dual_entropic(alpha, beta, M, reg, numItermax=10000, cur_v=None, 
 
     opt_u = c_transform_entropic(beta, M, reg, opt_v)
 
-    # pi = (torch.exp((opt_u[:, None] + opt_v[None, :] - M) / reg) *
-    #       alpha[:, None] * beta[None, :])
+    pi = (torch.exp((opt_u[:, None] + opt_v[None, :] - M) / reg) *
+          alpha[:, None] * beta[None, :])
 
-    uv_cross = opt_u[:, None] + opt_v[None, :]
-    exponent = (uv_cross - M)/reg
-    max_exponent = torch.max(exponent, dim=0, keepdim=True)[0]
-    pi  = torch.exp(exponent-max_exponent)
-
+    # uv_cross = opt_u[:, None] + opt_v[None, :]
+    # exponent = (uv_cross - M)/reg
+    # max_exponent = torch.max(exponent, dim=0, keepdim=True)[0]
+    # pi  = torch.exp(exponent-max_exponent)
+    return pi
     return pi, opt_u, opt_v, opt_u.mean()+opt_v.mean()

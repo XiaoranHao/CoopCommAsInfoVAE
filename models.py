@@ -251,6 +251,59 @@ class CoopCommDualOT(nn.Module):
     def EotLoss(self, C):
         return C.mean()
 
+## subroutine with q training
+class CoopCommDualOT_v1(nn.Module):
+
+    def __init__(self, num_data, n_chunk, reg, in_channels, latent_dim, activation, img_size,
+                 n_channels=None):
+        super().__init__()
+        self.c_function = Decoder(in_channels, latent_dim, activation, img_size, n_channels)
+        self.latent_dim = latent_dim
+
+        self.num_data = num_data
+        self.n_chunk = n_chunk
+        self.reg = reg
+        self.DualOT = LargeScaleOT.DualOT(latent_dim, num_data, reg, maxiter=1, lr1=1e-5, lr2=1e-3)
+
+    def make_cost(self, x, z):
+        with torch.no_grad():
+            z_chunk = torch.tensor_split(z,5)
+            C_all = []
+            for j in range(len(z_chunk)):
+                z = z_chunk[j]
+                dist = self.c_function(z)
+                x_total_batch = x.expand(-1, len(z), -1, -1).unsqueeze(2)
+                x_chunk = torch.tensor_split(x_total_batch, self.n_chunk)
+                C = []
+                for i in range(len(x_chunk)):
+                    C_ = -dist.log_prob(x_chunk[i]).sum([2, 3, 4])
+                    C.append(C_)
+                C = torch.cat(C)  
+                C_all.append(C)
+            C_all = torch.cat(C_all,dim=1)
+            return C_all    
+
+    def z_sample(self, n_sample):
+        mu = torch.zeros(self.latent_dim)
+        pz = Normal(loc=mu, scale=torch.ones_like(mu))
+        return pz.sample([n_sample])
+
+    def set_reg(self, reg):
+        self.DualOT.sto.reg = reg
+
+    def forward(self, x, idx, z, C):
+        W_xz = self.DualOT(idx, z, C, training=False)
+        categ = torch.distributions.categorical.Categorical(W_xz)
+        s = categ.sample()
+        z_sample = z[s]
+        dist = self.c_function(z_sample)
+        C_ = -dist.log_prob(x).sum([1, 2, 3])
+
+        return C_, z_sample
+
+    def DecLoss(self, C_):
+        return C_.mean()
+
 
 class VAE(nn.Module):
 
@@ -345,7 +398,7 @@ class CoopCommSemiDual2(nn.Module):
         del C
         return W_xz.t()
 
-    def forward(self, idx, n_sample=None, n_resample=5):
+    def forward(self, idx, n_sample=None, n_resample=10):
         for i in range(n_resample):
             if n_sample is None:
                 n_sample = self.n_sample

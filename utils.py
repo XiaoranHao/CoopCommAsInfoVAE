@@ -68,22 +68,33 @@ def train_DualOT(model, train_loader, args, device, log_interval=1):
     SaveModel(model, "savedmodels", args.save)
 
 
-def train_DualOT2(model, train_loader, args, device, log_interval=1):
+def train_DualOT2(model, train_loader, data_all, args, device, log_interval=1):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
     for epoch in range(1, args.epochs + 1):
         loss_sum = 0
+        z_all = model.z_sample(args.n_samples).to(device)
+        C_all = model.make_cost(data_all.to(device), z_all).to('cpu')
+        for i in range(1, 1 + args.n_iter):
+            x_index = torch.arange(0,2000)
+            z_index = torch.randint(0, args.n_samples, (args.z_bs,))
+            z = z_all[z_index]
+            C = C_all[x_index][:,z_index].to(device)
+            model.DualOT.learn_OT(x_index, z, C)
+            if i % 1000 == 0:
+                print(f"Iters {i}/{args.n_iter}")
+        print("OT Done")
         for batch_idx, (data, target, idx) in enumerate(train_loader):
             data = data.to(device)
+            C_batch = C_all[idx].to(device)
             optimizer.zero_grad()
-            C, C_, z_, z = model(data, idx)
-            if batch_idx == len(train_loader)-1:
-                loss = model.EotLoss(C_)
-                loss.backward()
-                optimizer.step()
-                scheduler.step()
-                with torch.no_grad():
-                    loss_sum += loss.item()
+            C_, z_ = model(data, idx, z_all, C_batch)
+            loss = model.DecLoss(C_)
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
+            with torch.no_grad():
+                loss_sum += loss.item()
 
             if epoch % log_interval == 0 and batch_idx == len(train_loader)-1:
                 # print(f"Epoch: {epoch}, Loss: {loss[0].item()}, Reconstruction: {loss[1].item()}, "
@@ -115,7 +126,7 @@ def train_SemiDualOT(model, train_loader, args, device, log_interval=1):
 
 def train_VAE(model, train_loader, args, device, log_interval=1):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs/10, eta_min=1e-5)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-5)
     for epoch in range(1, args.epochs + 1):
         loss_sum = 0
         recon_sum = 0
@@ -138,3 +149,5 @@ def train_VAE(model, train_loader, args, device, log_interval=1):
                       f" {recon_sum / len(train_loader)}, "
                       f"kl_z: {kl_sum / len(train_loader)}")
     SaveModel(model.decoder, "savedmodels", args.save)
+    SaveModel(model, "savedmodels", "vae"+ str(args.seed)+".pth")
+

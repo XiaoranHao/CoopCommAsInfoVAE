@@ -72,9 +72,9 @@ def get_loaders(args, idx=True):
         # sub_idx = train_data.targets <= 2
         # train_data.targets = train_data.targets[sub_idx]
         # train_data.data = train_data.data[sub_idx]
-        # subset = list(range(0, 2000))
-        # train_data = torch.utils.data.Subset(train_data, subset)
-        # test_data = torch.utils.data.Subset(test_data, subset)
+        subset = list(range(0, 2000))
+        train_data = torch.utils.data.Subset(train_data, subset)
+        test_data = torch.utils.data.Subset(test_data, subset)
 
         num_train, num_test = len(train_data), len(test_data)
         train_queue = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=8,
@@ -83,3 +83,31 @@ def get_loaders(args, idx=True):
         test_queue = torch.utils.data.DataLoader(test_data, batch_size=num_train, shuffle=False, pin_memory=True)
 
         return train_queue, test_queue, num_train, num_test
+
+
+def test_loader(args):
+    transform_continuous = transforms.Compose([transforms.ToTensor()])
+    transform_binary = transforms.Compose([transforms.ToTensor(), Binarize()])
+
+    data_continuous = MNIST("./", True, True, transform_continuous)
+    data_binary = MNIST("./", True, True, transform_binary)
+
+
+    subset = list(range(0, 2000))     
+    train_data_continuous = torch.utils.data.Subset(data_continuous, subset)
+    train_data_binary = torch.utils.data.Subset(data_binary, subset)
+
+
+    subset = list(range(0, 2000))
+    test_data_continuous = torch.utils.data.Subset(data_continuous, subset)
+    test_data_binary = torch.utils.data.Subset(data_binary, subset)
+
+    num_train, num_test = len(train_data_continuous), len(test_data_continuous)
+
+    train_queue_continuous = torch.utils.data.DataLoader(train_data_continuous, batch_size=num_train, shuffle=False)
+    train_queue_binary = torch.utils.data.DataLoader(train_data_binary, batch_size=args.batch_size, shuffle=True, pin_memory=True)
+
+    test_queue_continuous = torch.utils.data.DataLoader(test_data_continuous, batch_size=num_test, shuffle=False)
+    test_queue_binary = torch.utils.data.DataLoader(test_data_binary, batch_size=num_test, shuffle=False)
+
+    return train_queue_continuous, test_queue_continuous, num_train, num_test, train_queue_binary, test_queue_binary

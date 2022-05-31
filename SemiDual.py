@@ -1,57 +1,75 @@
-import models
-import torch
-import dataset
-import solver
-from torch import nn
-from utils import train_VAE, train_DualOT, train_SemiDualOT
 import time
-import gc
+import argparse
+import torch
+from torch import nn
+import models
+import solver
+import dataset
+from utils import train_SemiDualOT
 
-class config(object):
-    def __init__(self, dataset, batch_size):
-        self.dataset = dataset
-        self.batch_size = batch_size
-        self.data = './'
-        self.epochs = 100
-        self.learning_rate = 1e-4
-        self.save = 'Semidual.pth'
-        self.seed = 1
-args = config('MNIST',512)
+
+parser = argparse.ArgumentParser(description='EOT Experiment')
+parser.add_argument('--batch_size', type=int, default=256, metavar='N',
+                    help='input batch size for training (default: 256)')
+parser.add_argument('--epochs', type=int, default=1000, metavar='N',
+                    help='number of epochs to train (default: 80)')
+parser.add_argument('--dataset', type=str, default='MNIST',
+                    help='dataset (default: MNIST)')
+parser.add_argument('--data', type=str, default='./',
+                    help='data root (default: ./)')
+parser.add_argument('--save', type=str, default='DualNN.pth',
+                    help='save file name (default: exp1)')
+parser.add_argument('--actif', type=str, default='lrelu', metavar='Activation',
+                    help='activation function (default: LeakyRelu)')
+parser.add_argument('--latent_dim', type=int, default=2, metavar='N',
+                    help='dimension of z space (default: 2)')
+parser.add_argument('--sample_size', type=int, default=10000, metavar='N',
+                    help='sample size for prior distribution (default: 1024)')
+parser.add_argument('--chunk_size', type=int, default=10, metavar='N',
+                    help='chunk size for batch (default: 10)')
+parser.add_argument('--epsilon', type=float, default=1.0, metavar='N',
+                    help='weight of regularization (default: 1.0)')
+parser.add_argument('--learning_rate', type=float, default=1e-4,
+                    help='init learning rate')
+parser.add_argument('--no-cuda', action='store_true', default=False,
+                    help='disables CUDA training')
+parser.add_argument('--seed', type=int, default=1, metavar='S',
+                    help='random seed (default: 1)')
+
+args = parser.parse_args()
+args.cuda = not args.no_cuda and torch.cuda.is_available()
+device = torch.device("cuda" if args.cuda else "cpu")
 
 torch.cuda.manual_seed(args.seed)
 torch.cuda.manual_seed_all(args.seed)
 torch.manual_seed(args.seed)
 
-actif='lrelu'
-cuda = torch.cuda.is_available()
-device = torch.device("cuda" if cuda else "cpu")
 activations_list = {
     'softplus': nn.Softplus(),
     'lrelu': nn.LeakyReLU(),
     'relu': nn.ReLU()
 }
-activFun = activations_list[actif]
-train_loader, ts, num_train, num_test = dataset.get_loaders(args)
-for batch_idx, (data, target, _) in enumerate(ts):
-    pass
+activFun = activations_list[args.actif]
 
-data = data.to(device)
+if __name__ == '__main__':
 
-img_size = 28
-epsilon = 1
-in_channels = 1
-latent_dim = 2
-n_samples = 3000
-n_chunk = 600
+    train_loader, ts, num_train, num_test = dataset.get_loaders(args)
+    for batch_idx, (data, target, _) in enumerate(ts):
+        pass
+    data = data.to(device)
 
+    if args.dataset == 'MNIST':
+        img_size = 28
+    else:
+        img_size = 64
+    # initialize model
+    in_channels = 1
+    model = models.CoopCommSemiDual2(data, num_train, args.sample_size, args.chunk_size, args.epsilon, in_channels, args.latent_dim, activFun, img_size, device)
+    model = model.to(device)
+    model.c_function.load_state_dict(torch.load('./savedmodels/vae_decoder1.pth'))
+    model.load_state_dict(torch.load('./savedmodels/Semidual1.pth'))
 
-model = models.CoopCommSemiDual2(data, num_train, n_samples, n_chunk, epsilon, in_channels, latent_dim, activFun, img_size, device)
-model = model.to(device)
-
-start_time = time.time()
-model.c_function.load_state_dict(torch.load('./savedmodels/decoder.pth'))
-
-
-train_SemiDualOT(model, train_loader, args, device, log_interval=1)
-print("after training")
-print('training time elapsed {}s'.format(time.time() - start_time))
+    start_time = time.time()
+    train_SemiDualOT(model, train_loader, args, device, log_interval=1)
+    print("training done.")
+    print('training time elapsed {}s'.format(time.time() - start_time))

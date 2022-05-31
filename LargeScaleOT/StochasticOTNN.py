@@ -1,3 +1,4 @@
+from tkinter import E
 import torch
 import torch.nn as nn
 import torch.nn.functional as func
@@ -24,7 +25,7 @@ class DualNet(nn.Module):
 class DiscretePotential(nn.Module):
     def __init__(self, length):
         super().__init__()
-        self.register_parameter(name="u", param=torch.nn.Parameter(torch.zeros(length)))
+        self.register_parameter(name="u", param=torch.nn.Parameter(torch.zeros(length) + 70))
 
     def forward(self, idx):
         return self.u[idx]
@@ -49,20 +50,13 @@ class PyTorchStochasticOT(nn.Module):
 
     def dual_OT_batch_loss(self, u_batch, v_batch,  M_batch):
         uv_cross = u_batch[:, None] + v_batch[None, :]
-        exponent_ = (uv_cross - M_batch)/self.reg-1.
-        exponent = torch.where(exponent_ > 85, exponent_- 30, exponent_)
+        exponent = (uv_cross - M_batch)/self.reg-1.
+        if torch.any(exponent>85) and self.training:
+            exponent = exponent - 20
         max_exponent = torch.max(exponent, dim=1, keepdim=True)[0]
         H_epsilon = torch.exp(exponent)
         H_epsilon_weight = torch.exp(exponent-max_exponent)
         f_epsilon = - self.reg * H_epsilon
-        # print("uv: ", uv_cross.max())
-        # print("u: ",  u_batch.max())
-        # print("v: ",  v_batch.max())
-        #
-        # print("M: ",  M_batch.min())
-        # print("exp: ", exponent.max())
-        # print("H: ", H_epsilon.max())
-
         return - torch.mean(uv_cross + f_epsilon), H_epsilon_weight
 
     def forward(self, idx, z_batch, M):
@@ -87,33 +81,23 @@ class DualOT(nn.Module):
                             {"params": self.sto.v.parameters()}]
 
         optimizer = torch.optim.Adam(trainable_params, lr=self.lr1)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.maxiter, eta_min=1e-8)
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.maxiter, eta_min=1e-8)
 
         for i in range(1, self.maxiter+1):
             optimizer.zero_grad()
-            # if i % 5000 == 1:
-            #     u_batch = (self.sto.u(d_idx))
-            #     v_batch = (self.sto.v(z_batch))
-            #     uv_cross = u_batch[:, None] + v_batch[None, :]
-            #     exponent = (uv_cross - M_batch) / 1 - 1.
-            #     max_exponent = torch.max(exponent, dim=1, keepdim=True)[0]
-            #     print("uv: ", uv_cross.max())
-            #     print("u: ",  u_batch.max())
-            #     print("v: ",  v_batch.max())
-            #
-            #     print("M: ",  M_batch.min())
-            #     print("exp: ", exponent.max())
             loss_batch, H_epsilon = self.sto(d_idx, z_batch, M_batch)
             loss_batch.backward()
             optimizer.step()
             # scheduler.step()
-            # if i % 1000 == 1:
+            # if i % 10 == 1:
             #     print(i, "OT loss: ", loss_batch.item())
 
-    def forward(self, d_idx, z_batch, M_batch):
-        self.learn_OT(d_idx, z_batch, M_batch)
+    def forward(self, d_idx, z_batch, M_batch,training=True):
+        if training:
+            self.learn_OT(d_idx, z_batch, M_batch)
         with torch.no_grad():
             _, H_epsilon = self.sto(d_idx, z_batch, M_batch)
+            # print(_.item())
         # importance weight
         return H_epsilon
 
