@@ -83,6 +83,7 @@ def train_DualOT2(model, train_loader, data_all, args, device, log_interval=1):
             model.DualOT.learn_OT(x_index, z, C)
             if i % 1000 == 0:
                 print(f"Iters {i}/{args.n_iter}")
+                model.DualOT(x_index, z, C)
         print("OT Done")
         for batch_idx, (data, target, idx) in enumerate(train_loader):
             data = data.to(device)
@@ -100,7 +101,7 @@ def train_DualOT2(model, train_loader, data_all, args, device, log_interval=1):
                 # print(f"Epoch: {epoch}, Loss: {loss[0].item()}, Reconstruction: {loss[1].item()}, "
                 #       f"kl_z2: {loss[2].item()}")
                 print(f"Epoch: {epoch}, Loss: {loss_sum / len(train_loader)}")
-    SaveModel(model, "savedmodels", args.save)
+        SaveModel(model, "savedmodels", args.save)
 
 def train_SemiDualOT(model, train_loader, args, device, log_interval=1):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)

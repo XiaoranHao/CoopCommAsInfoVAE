@@ -106,8 +106,8 @@ class config(object):
         self.dataset = dataset
         self.batch_size = batch_size
         self.data = './'
-        self.epochs = 10
-        self.learning_rate = 5e-5
+        self.epochs = 200
+        self.learning_rate = 1e-4
         self.save = 'first_try.pth'
         self.seed = 2
         self.n_samples = 50000

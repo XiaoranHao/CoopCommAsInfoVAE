@@ -25,7 +25,7 @@ class DualNet(nn.Module):
 class DiscretePotential(nn.Module):
     def __init__(self, length):
         super().__init__()
-        self.register_parameter(name="u", param=torch.nn.Parameter(torch.zeros(length) + 70))
+        self.register_parameter(name="u", param=torch.nn.Parameter(torch.zeros(length) + 0))
 
     def forward(self, idx):
         return self.u[idx]
@@ -50,14 +50,21 @@ class PyTorchStochasticOT(nn.Module):
 
     def dual_OT_batch_loss(self, u_batch, v_batch,  M_batch):
         uv_cross = u_batch[:, None] + v_batch[None, :]
-        exponent = (uv_cross - M_batch)/self.reg-1.
-        if torch.any(exponent>85) and self.training:
-            exponent = exponent - 20
+        exponent_ = (uv_cross - M_batch)/self.reg-1.
+        exponent = torch.where(exponent_ > 55, exponent_- 15, exponent_)
+        # exponent = (uv_cross - M_batch)/self.reg-1.
+        # if torch.any(exponent>55) and self.training:
+        #     exponent = exponent - 30
         max_exponent = torch.max(exponent, dim=1, keepdim=True)[0]
         H_epsilon = torch.exp(exponent)
         H_epsilon_weight = torch.exp(exponent-max_exponent)
         f_epsilon = - self.reg * H_epsilon
-        return - torch.mean(uv_cross + f_epsilon), H_epsilon_weight
+        # print(f_epsilon.min())
+        neg_loss = - torch.mean(uv_cross + f_epsilon)
+        # return neg_loss, H_epsilon
+
+        return neg_loss, H_epsilon_weight
+
 
     def forward(self, idx, z_batch, M):
         u_batch = self.u(idx)
@@ -97,7 +104,7 @@ class DualOT(nn.Module):
             self.learn_OT(d_idx, z_batch, M_batch)
         with torch.no_grad():
             _, H_epsilon = self.sto(d_idx, z_batch, M_batch)
-            # print(_.item())
+            print(_.item())
         # importance weight
         return H_epsilon
 

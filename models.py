@@ -263,7 +263,7 @@ class CoopCommDualOT_v1(nn.Module):
         self.num_data = num_data
         self.n_chunk = n_chunk
         self.reg = reg
-        self.DualOT = LargeScaleOT.DualOT(latent_dim, num_data, reg, maxiter=1, lr1=1e-5, lr2=1e-3)
+        self.DualOT = LargeScaleOT.DualOT(latent_dim, num_data, reg, maxiter=1, lr1=5e-6, lr2=1e-3)
 
     def make_cost(self, x, z):
         with torch.no_grad():

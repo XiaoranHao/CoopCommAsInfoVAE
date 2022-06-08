@@ -43,6 +43,20 @@ class Binarize(object):
         return self.__class__.__name__ + '()'
 
 
+
+
+class CropCelebA64(object):
+    """ This class applies cropping for CelebA64. This is a simplified implementation of:
+    https://github.com/andersbll/autoencoding_beyond_pixels/blob/master/dataset/celeba.py
+    """
+    def __call__(self, pic):
+        new_pic = pic.crop((15, 40, 178 - 15, 218 - 30))
+        return new_pic
+
+    def __repr__(self):
+        return self.__class__.__name__ + '()'
+
+
 def _data_transforms_mnist():
     """Get data transforms for mnist."""
     train_transform = transforms.Compose([
@@ -54,6 +68,22 @@ def _data_transforms_mnist():
         transforms.ToTensor(),
         Binarize(),
 
+    ])
+
+    return train_transform, valid_transform
+
+def _data_transforms_celeba64(size):
+    train_transform = transforms.Compose([
+        CropCelebA64(),
+        transforms.Resize(size),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+    ])
+
+    valid_transform = transforms.Compose([
+        CropCelebA64(),
+        transforms.Resize(size),
+        transforms.ToTensor(),
     ])
 
     return train_transform, valid_transform
