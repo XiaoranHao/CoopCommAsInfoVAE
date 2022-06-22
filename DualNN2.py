@@ -70,74 +70,83 @@
 #     print("after training")
 #     print('training time elapsed {}s'.format(time.time() - start_time))
 
-
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import cm
 
-import models
 import torch
-import dataset
-import solver
 from torch import nn
-from utils import train_DualOT2
+from torch.utils.data import Dataset, DataLoader
+
+import model_syn
 
 import time
 import gc
 
+def generate25Gaussian(n_samples):
+    mean = torch.arange(-2,2.1,1)
+    mu = torch.cartesian_prod(mean, mean)
+    scale = 0.02 * torch.ones_like(mu)
+    dist = torch.distributions.Normal(loc=mu, scale=scale)
+    samples = dist.sample([n_samples]).reshape(-1,2)
+    return samples
 
+
+class SyntheticGaussian(Dataset):
+    def __init__(self, data, transform=None):
+        self.data = data
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        data = self.data[idx]
+        if self.transform:
+            data = self.transform(data)
+        return data, idx
 
 torch.cuda.manual_seed(2)
 torch.cuda.manual_seed_all(2)
 torch.manual_seed(2)
 
-actif='lrelu'
-device = 'cuda'
-activations_list = {
-    'softplus': nn.Softplus(),
-    'lrelu': nn.LeakyReLU(),
-    'relu': nn.ReLU()
-}
-activFun = activations_list[actif]
+Data = generate25Gaussian(300)
+plt.scatter(Data[:,0],Data[:,1],s=2)
+    
+dataset = SyntheticGaussian(Data)
+train_dataloader = DataLoader(dataset, batch_size=1500, shuffle=True)
+test_dataloader = DataLoader(dataset, batch_size=7500, shuffle=False)
 
+in_channels = 2
+latent_dim = 5
+activation = nn.LeakyReLU()
+num_data = 7500
+n_chunk = 2
+reg = 1
+model2 = model_syn.CoopCommSemiDual(num_data, n_chunk, reg, in_channels, latent_dim, activation)
+model2.c_function.load_state_dict(torch.load('syn_ot_decoder.pth'))
+
+
+device = "cuda"
+model2.to(device)
 
 class config(object):
-    def __init__(self, dataset, batch_size):
-        self.dataset = dataset
-        self.batch_size = batch_size
-        self.data = './'
-        self.epochs = 200
-        self.learning_rate = 1e-4
-        self.save = 'second_try.pth'
+    def __init__(self,):
+
+        self.epochs = 2
+        self.learning_rate = 5e-4
         self.seed = 2
-        self.n_samples = 50000
-        self.n_iter = 1000
-        self.z_bs = 2000
-        
-args = config('MNIST',512)
-train_loader, ts, num_train, num_test, train_loader_binary, ts_binary = dataset.test_loader(args)
-
-
-img_size = 28
-epsilon = 5
-in_channels = 1
-latent_dim = 2
-n_chunk = 80
-
-model = models.CoopCommDualOT_v1(num_train, n_chunk, 
-                               epsilon, in_channels, latent_dim, activFun, img_size)
-model.c_function.load_state_dict(torch.load('./savedmodels/vae_decoder1.pth'))
-for batch_idx, (data_binary, target, idx) in enumerate(ts_binary):
+        self.save = "syn_seot.pth"
+        self.n_samples = 60000
+        self.n_iter = 5000
+        self.z_bs = 3000
+args = config()
+     
+for b_,(data_all, idx) in enumerate(test_dataloader):
     pass
-
-
-model = model.to(device)
 start_time = time.time()
-
-train_DualOT2(model, train_loader_binary, data_binary, args, device, log_interval=1)
-
+model_syn.train2(model2, train_dataloader, data_all, args, device)
+torch.save(model2.state_dict(), args.save)
 print("after training")
 print('training time elapsed {}s'.format(time.time() - start_time))
-
-
 
