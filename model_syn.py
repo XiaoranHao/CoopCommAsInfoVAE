@@ -300,9 +300,9 @@ def train2(model, train_dataloader, data_all, args, device):
                 print(f"Iters {i}/{args.n_iter}")
                 # print(model.v.max())
                 # print(model.v.min())
-        print(model.otsolver.cur_iter)
+        # print(model.otsolver.cur_iter)
         model.otsolver.reset_iter()
-        print(model.otsolver.cur_iter)
+        # print(model.otsolver.cur_iter)
 
         print("OT done")
         for batch_idx, (data, idx) in enumerate(train_dataloader):

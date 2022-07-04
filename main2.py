@@ -1,68 +1,40 @@
 import time
 import argparse
+import os
 import torch
-from torch import nn
-import models
+import SemiDualOT
 import dataset
-from utils import train
+import yaml
 
 parser = argparse.ArgumentParser(description='EOT Experiment')
-parser.add_argument('--batch_size', type=int, default=256, metavar='N',
-                    help='input batch size for training (default: 256)')
-parser.add_argument('--epochs', type=int, default=80, metavar='N',
-                    help='number of epochs to train (default: 80)')
-parser.add_argument('--dataset', type=str, default='MNIST',
-                    help='dataset (default: MNIST)')
-parser.add_argument('--data', type=str, default='./',
-                    help='data root (default: ./)')
-parser.add_argument('--save', type=str, default='exp1',
-                    help='save file name (default: exp1)')
-parser.add_argument('--actif', type=str, default='lrelu', metavar='Activation',
-                    help='activation function (default: LeakyRelu)')
-parser.add_argument('--latent_dim', type=int, default=2, metavar='N',
-                    help='dimension of z space (default: 2)')
-parser.add_argument('--sample_size', type=int, default=1024, metavar='N',
-                    help='sample size for prior distribution (default: 1024)')
-parser.add_argument('--chunk_size', type=int, default=10, metavar='N',
-                    help='chunk size for batch (default: 10)')
-parser.add_argument('--epsilon', type=float, default=1.0, metavar='N',
-                    help='weight of regularization (default: 1.0)')
-parser.add_argument('--learning_rate', type=float, default=1e-2,
-                    help='init learning rate')
-parser.add_argument('--no-cuda', action='store_true', default=False,
-                    help='disables CUDA training')
-parser.add_argument('--seed', type=int, default=1, metavar='S',
-                    help='random seed (default: 1)')
-
+parser.add_argument('--config', type=str, default='./config/VAE.yaml',
+                    help='config path (default: ./config/VAE.yaml)')
+parser.add_argument('--pretrain', type=str, default='./savedmodels/Gaussian_decoder.pth',
+                    help='config path (default: ./savedmodels/Gaussian_decoder.pth)')
 args = parser.parse_args()
-args.cuda = not args.no_cuda and torch.cuda.is_available()
-device = torch.device("cuda" if args.cuda else "cpu")
+config_path = args.config
+decoder_path = args.pretrain
 
-torch.cuda.manual_seed(args.seed)
-torch.cuda.manual_seed_all(args.seed)
-torch.manual_seed(args.seed)
+with open(config_path, 'r') as file:
+    config = yaml.safe_load(file)
 
-activations_list = {
-    'softplus': nn.Softplus(),
-    'lrelu': nn.LeakyReLU(),
-    'relu': nn.ReLU()
-}
-activFun = activations_list[args.actif]
+torch.cuda.manual_seed(config['training']['seed'])
+torch.cuda.manual_seed_all(config['training']['seed'])
+torch.manual_seed(config['training']['seed'])
 
 if __name__ == '__main__':
 
-    train_loader, test_loader = dataset.get_loaders(args)
-    if args.dataset == 'MNIST':
-        img_size = 28
+    train_queue, reference_queue, test_queue, num_train, num_test = dataset.get_loaders(**config['dataset'])
+    if config['model']['in_channels'] == 2:
+        for b_,(data_all, idx) in enumerate(reference_queue):
+            pass
     else:
-        img_size = 64
-    # initialize model
-    in_channel = 1
-    model = models.Dirichletp(args.sample_size, args.chunk_size, args.epsilon, in_channel,
-                                    args.latent_dim, activFun, img_size, device)
-    model = model.to(device)
-
+        for b_,(data_all, target, idx) in enumerate(reference_queue):
+            pass
+    model = SemiDualOT.CoopCommSemiDual(**config['model'])
+    model.c_function.load_state_dict(torch.load(decoder_path))
+    model.cuda()
     start_time = time.time()
-    train(model, train_loader, args, device, log_interval=10)
-    print("after training")
+    model.train_model(train_queue, data_all, **config['training'])
+
     print('training time elapsed {}s'.format(time.time() - start_time))
