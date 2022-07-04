@@ -1,0 +1,22 @@
+dataset:
+  dataset: celeba64
+  path: './celeba'
+  subclass:
+  subset: 1024
+  return_index: False
+  batch_size: 256
+
+training:
+  lr: 1.0e-4
+  epochs: 20000
+  save: celeba64_decoder.pth
+  seed: 1234
+
+model:
+  in_channels: 3
+  latent_dim: 10
+  activation: lrelu
+  img_size: 64
+  device: cuda
+  n_channels: [512, 256, 128, 64]
+

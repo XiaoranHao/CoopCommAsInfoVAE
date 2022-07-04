@@ -1,0 +1,29 @@
+dataset:
+  dataset: mixedGaussian
+  path: './'
+  subclass:
+  subset: 
+  return_index: False
+  batch_size: 1500
+
+training:
+  lr: 1.0e-3
+  epochs: 1000
+  n_iter: 5000
+  n_samples: 60000
+  n_xchunk: 2
+  n_zchunk: 2
+  device: cuda
+  save: OTAE_g.pth
+  seed: 1234
+
+model:
+  num_data: 7500
+  epsilon: 1
+  in_channels: 2
+  latent_dim: 5
+  activation: lrelu
+  img_size: 
+  maxiter: 1
+  device: cuda
+  n_channels: 

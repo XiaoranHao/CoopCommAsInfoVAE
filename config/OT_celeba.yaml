@@ -1,0 +1,29 @@
+dataset:
+  dataset: celeba64
+  path: './celeba'
+  subclass:
+  subset: 1024
+  return_index: True
+  batch_size: 256
+
+training:
+  lr: 1.0e-4
+  epochs: 1000
+  n_iter: 2000
+  n_samples: 40000
+  n_xchunk: 20
+  n_zchunk: 100
+  device: cuda
+  save: OTAE_celeba64_1000.pth
+  seed: 1234
+
+model:
+  num_data: 1024
+  epsilon: 1
+  in_channels: 3
+  latent_dim: 10
+  activation: lrelu
+  img_size: 64
+  maxiter: 1
+  device: cuda
+  n_channels: [512, 256, 128, 64]

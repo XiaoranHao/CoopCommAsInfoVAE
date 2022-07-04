@@ -1,0 +1,22 @@
+dataset:
+  dataset: MNIST
+  path: './'
+  subclass:
+  subset: 2560
+  return_index: False
+  batch_size: 256
+
+training:
+  lr: 1.0e-3
+  epochs: 40000
+  save: mnist_decoder.pth
+  seed: 1234
+
+model:
+  in_channels: 1
+  latent_dim: 5
+  activation: lrelu
+  img_size: 28
+  device: cuda
+  n_channels: 
+

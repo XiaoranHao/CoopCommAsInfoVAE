@@ -1,0 +1,22 @@
+dataset:
+  dataset: mixedGaussian
+  path: './'
+  subclass:
+  subset:
+  return_index: False
+  batch_size: 1500
+
+training:
+  lr: 1.0e-3
+  epochs: 50000
+  save: Gaussian_decoder.pth
+  seed: 1234
+
+model:
+  in_channels: 2
+  latent_dim: 5
+  activation: lrelu
+  img_size: 
+  device: cuda
+  n_channels: 
+
