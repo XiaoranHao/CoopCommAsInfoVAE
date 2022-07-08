@@ -4,6 +4,8 @@ from torch import nn
 from base import *
 from utils import SaveModel
 import LargeScaleOT
+
+import time
 class CoopCommSemiDual(nn.Module):
     def __init__(self, num_data, epsilon, in_channels, latent_dim, activation, img_size,
                  maxiter=1, device='cuda', n_channels=None):
@@ -15,6 +17,7 @@ class CoopCommSemiDual(nn.Module):
         self.in_channels = in_channels
         self.epsilon = epsilon
         self.num_data = num_data
+        # register v as buffer
         self.v = None
         self.latent_dim = latent_dim
         self.maxiter = maxiter
@@ -59,11 +62,8 @@ class CoopCommSemiDual(nn.Module):
         self.v = v
 
     def forward(self, x, idx, z, C):
-        W_xz = self.otsolver(self.px[idx], C, self.epsilon, self.v[idx]).t()
-        try:
-            categ = torch.distributions.categorical.Categorical(W_xz)
-        except:
-            print("max: ",W_xz.max())
+        W_xz = self.otsolver(self.px, C, self.epsilon, self.v).t()[idx]
+        categ = torch.distributions.categorical.Categorical(W_xz)
         s = categ.sample()
         z_sample = z[s]
         dist = self.c_function(z_sample)
@@ -75,6 +75,7 @@ class CoopCommSemiDual(nn.Module):
         return C_.mean()
 
     def train_model(self, train_dataloader, data_all, lr, epochs, n_iter, n_samples, n_xchunk, n_zchunk, device, save, seed, log_interval=10):
+        print(len(train_dataloader.dataset))
         optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-5)
         loss_best = 10000
@@ -96,9 +97,9 @@ class CoopCommSemiDual(nn.Module):
             if self.in_channels == 1 or self.in_channels ==3:
                 for batch_idx, (data, target, idx) in enumerate(train_dataloader):
                     data = data.to(device)
-                    C_batch = C_all[idx].to(device)
+                    # C_batch = C_all[idx].to(device)
                     optimizer.zero_grad()
-                    C_, z_ = self(data, idx, z_all, C_batch.t())
+                    C_, z_ = self(data, idx, z_all, C_all.t())
                     loss = self.DecLoss(C_)
                     loss.backward()
                     optimizer.step()
@@ -115,9 +116,66 @@ class CoopCommSemiDual(nn.Module):
             else:
                 for batch_idx, (data, idx) in enumerate(train_dataloader):
                     data = data.to(device)
-                    C_batch = C_all[idx].to(device)
                     optimizer.zero_grad()
-                    C_, z_ = self(data, idx, z_all, C_batch.t())
+                    C_, z_ = self(data, idx, z_all, C_all.t())
+                    loss = self.DecLoss(C_)
+                    loss.backward()
+                    optimizer.step()
+                    # scheduler.step()
+                    with torch.no_grad():
+                        loss_sum += loss.item()
+                    
+                    if epoch % log_interval == 0 and batch_idx == len(train_dataloader)-1:
+                        loss_sum = loss_sum / len(train_dataloader)
+                        print(f"Epoch: {epoch}, Loss: {loss_sum}")
+                        if loss_sum  < loss_best:
+                            loss_best = loss_sum 
+                            SaveModel(self, "savedmodels", save)
+        SaveModel(self, "savedmodels", save)
+
+
+    def train_approx(self, train_dataloader, data_all, lr, epochs, n_iter, n_samples, n_xchunk, n_zchunk, device, save, seed, log_interval=10):
+        print(len(train_dataloader.dataset))
+        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+        loss_best = 10000
+        for epoch in range(1, epochs + 1):
+            loss_sum = 0
+            z_all = self.z_sample(n_samples).to(device)
+            C_all = self.make_cost(data_all.to(device), z_all, n_xchunk, n_zchunk).to(device) 
+            x_index = torch.arange(0,self.num_data)
+            z_index = torch.randperm(n_samples, device=device)[:2000]
+            for i in range(1, 1 + n_iter):
+                z_index = torch.randperm(n_samples, device=device)[:2000]
+                z = z_all[z_index]
+                C = C_all[x_index][:,z_index].to(device)
+                self.SemiDual_Train(C.t())
+                if i % 500 == 0:
+                    print(f"Iters {i}/{n_iter}")
+            self.otsolver.reset_iter()
+            if self.in_channels == 1 or self.in_channels ==3:
+                for batch_idx, (data, target, idx) in enumerate(train_dataloader):
+                    data = data.to(device)
+                    # C_batch = C_all[idx].to(device)
+                    optimizer.zero_grad()
+                    C_, z_ = self(data, idx, z_all, C_all.t())
+                    loss = self.DecLoss(C_)
+                    loss.backward()
+                    optimizer.step()
+                    # scheduler.step()
+                    with torch.no_grad():
+                        loss_sum += loss.item()
+                    
+                    if epoch % log_interval == 0 and batch_idx == len(train_dataloader)-1:
+                        loss_sum = loss_sum / len(train_dataloader)
+                        print(f"Epoch: {epoch}, Loss: {loss_sum}")
+                        if loss_sum  < loss_best:
+                            loss_best = loss_sum 
+                            SaveModel(self, "savedmodels", save)
+            else:
+                for batch_idx, (data, idx) in enumerate(train_dataloader):
+                    data = data.to(device)
+                    optimizer.zero_grad()
+                    C_, z_ = self(data, idx, z_all, C_all.t())
                     loss = self.DecLoss(C_)
                     loss.backward()
                     optimizer.step()

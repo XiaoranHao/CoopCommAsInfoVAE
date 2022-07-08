@@ -8,7 +8,7 @@ dataset:
 
 training:
   lr: 1.0e-4
-  epochs: 500
+  epochs: 20
   n_iter: 4000
   n_samples: 40000
   n_xchunk: 20

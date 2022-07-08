@@ -8,6 +8,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=p_ps848
 #SBATCH --mem=50000
+#SBATCH --nodelist=volta001
 #SBATCH --mail-user=xiaoranhao1012@gmail.com
 #SBATCH --mail-type=ALL
 source ~/.bashrc

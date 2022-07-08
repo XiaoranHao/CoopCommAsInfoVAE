@@ -8,13 +8,13 @@ dataset:
 
 training:
   lr: 1.0e-4
-  epochs: 1000
+  epochs: 40
   n_iter: 2000
   n_samples: 40000
-  n_xchunk: 20
-  n_zchunk: 100
+  n_xchunk: 10
+  n_zchunk: 20
   device: cuda
-  save: OTAE_celeba64_1000_nopre.pth
+  save: OTAE_celeba64_40.pth
   seed: 1234
 
 model:
